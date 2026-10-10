@@ -1,0 +1,775 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>WhatsApp Assistant Demo</title>
+<meta name="description" content="A chat demo of an assistant that answers FAQs, tracks orders, takes orders and bookings for a small business, in English or Hinglish.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+html { color-scheme: light; }
+body { margin: 0; }
+[hidden] { display: none !important; }
+:root {
+  /* Layout: business picker on top, chat phone on the left, "what the owner sees" panel on the right. Stacks on narrow screens. */
+  --bg: #F3F5F2;
+  --surface: #FFFFFF;
+  --fg: #16211C;
+  --muted: #5E6B64;
+  --line: #DDE2DC;
+  --accent: #0F6B5C;
+  --accent-fg: #FFFFFF;
+  --out: #D5EEE3;
+  --chat-bg: #ECEFE9;
+  --warn: #B3402A;
+  --font-display: 'Bricolage Grotesque', system-ui, sans-serif;
+  --font-body: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0E1411; --surface: #151D19; --fg: #E6ECE8; --muted: #93A19A; --line: #26312B;
+    --accent: #4CC2AA; --accent-fg: #06201A; --out: #1D4A3E; --chat-bg: #101815; --warn: #E58468;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0E1411; --surface: #151D19; --fg: #E6ECE8; --muted: #93A19A; --line: #26312B;
+  --accent: #4CC2AA; --accent-fg: #06201A; --out: #1D4A3E; --chat-bg: #101815; --warn: #E58468;
+  color-scheme: dark;
+}
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 980px; margin: 0 auto; padding-block: 28px 48px; padding-inline: 16px; display: flex; flex-direction: column; gap: 22px; }
+h1, h2 { font-family: var(--font-display); margin: 0; text-wrap: balance; }
+h1 { font-size: 1.8rem; line-height: 1.1; letter-spacing: -0.01em; }
+h2 { font-size: 1.05rem; }
+p { margin: 0; }
+.muted { color: var(--muted); }
+.note { padding: 10px 14px; border: 1px dashed var(--line); border-radius: 8px; background: var(--surface); font-size: 0.9rem; }
+
+.picker { display: flex; flex-direction: column; gap: 8px; }
+.label { font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+.tab { font: inherit; background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 16px; cursor: pointer; }
+.tab[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+
+.grid { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 820px) { .grid { grid-template-columns: minmax(0, 420px) minmax(0, 1fr); } }
+
+.phone { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+.chat-head { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--accent); color: var(--accent-fg); }
+.avatar { width: 38px; height: 38px; border-radius: 50%; background: var(--accent-fg); color: var(--accent); display: grid; place-items: center; font-family: var(--font-display); font-weight: 700; flex: none; }
+.chat-head .who { flex: 1; min-width: 0; }
+.chat-head .name { font-weight: 600; line-height: 1.2; overflow-wrap: anywhere; }
+.chat-head .state { font-size: 0.8rem; opacity: 0.85; }
+.reset { font: inherit; font-size: 0.82rem; background: transparent; color: inherit; border: 1px solid currentColor; border-radius: 999px; padding: 4px 12px; cursor: pointer; flex: none; }
+#msgs { height: 460px; overflow-y: auto; padding: 14px; background: var(--chat-bg); display: flex; flex-direction: column; gap: 8px; }
+.bubble { max-width: 84%; padding: 8px 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); white-space: pre-wrap; overflow-wrap: anywhere; }
+.bubble.me { align-self: flex-end; background: var(--out); border-color: transparent; }
+.bubble.bot { align-self: flex-start; }
+.bubble .t { display: block; text-align: right; font-size: 0.7rem; color: var(--muted); margin-top: 2px; }
+.bubble.typing { color: var(--muted); font-style: italic; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--line); min-height: 20px; }
+.chip { font: inherit; background: var(--surface); color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; padding: 5px 12px; cursor: pointer; font-size: 0.88rem; }
+.chip:hover { background: var(--accent); color: var(--accent-fg); }
+.composer { display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--line); }
+.composer input { flex: 1; min-width: 0; font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 999px; padding: 9px 14px; }
+.composer button { font: inherit; font-weight: 600; background: var(--accent); color: var(--accent-fg); border: 0; border-radius: 999px; padding: 9px 18px; cursor: pointer; }
+input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.owner { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 12px 20px; margin: 0; }
+.stats > div { display: flex; flex-direction: column; gap: 0; min-width: 0; }
+.stats dt { font-size: 0.74rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.stats dd { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: 1.6rem; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.alerts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.alert { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
+.alert .kind { font-size: 0.75rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.alert.urgent .kind { color: var(--warn); font-weight: 600; }
+.empty { color: var(--muted); }
+.try { display: flex; flex-direction: column; gap: 6px; font-size: 0.9rem; color: var(--muted); }
+.try ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>WhatsApp Assistant</h1>
+    <p class="muted">Customers ask questions, order, book and check their order. The owner only gets pinged when it matters.</p>
+  </header>
+
+  <p class="note">This demo runs in your browser with scripted replies for made-up businesses. The real assistant uses AI, so it understands free-text messages. Here you can write in English or Hinglish (Hindi in English letters).</p>
+
+  <div class="picker">
+    <span class="label" id="pickLabel">Pick a business</span>
+    <div class="tabs" id="tabs" role="group" aria-labelledby="pickLabel"></div>
+  </div>
+
+  <div class="grid">
+    <section class="phone" aria-label="Chat with the business">
+      <div class="chat-head">
+        <div class="avatar" id="avatar" aria-hidden="true">M</div>
+        <div class="who"><div class="name" id="bizName"></div><div class="state" id="langState">Assistant · replies instantly</div></div>
+        <button class="reset" id="reset" type="button">Reset chat</button>
+      </div>
+      <div id="msgs" role="log" aria-live="polite"></div>
+      <div class="chips" id="chips"></div>
+      <form class="composer" id="form" autocomplete="off">
+        <input id="input" type="text" placeholder="Type a message" aria-label="Type a message" maxlength="200">
+        <button type="submit">Send</button>
+      </form>
+    </section>
+
+    <section class="owner" aria-labelledby="ownerTitle">
+      <h2 id="ownerTitle">What the owner sees</h2>
+      <dl class="stats" id="stats"></dl>
+      <ul class="alerts" id="alerts"></ul>
+      <div class="try">
+        <span>Things to try:</span>
+        <ul id="tryList"></ul>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var DAYS = {
+    en: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+    hl: ['Ravivar', 'Somvar', 'Mangalvar', 'Budhvar', 'Guruvar', 'Shukravar', 'Shanivar']
+  };
+  var WD_ALIAS = [['sun', 'ravi'], ['mon', 'som'], ['tue', 'mangal'], ['wed', 'budh'], ['thu', 'guru'], ['fri', 'shukra'], ['sat', 'shani']];
+  var STATUS_HL = {
+    'Delivered': 'Deliver ho gaya', 'Out for delivery': 'Delivery ke liye nikal chuka hai', 'Being prepared': 'Taiyaar ho raha hai',
+    'Received': 'Order mil gaya', 'Shipped': 'Bhej diya gaya hai', 'Packed': 'Pack ho gaya hai'
+  };
+
+  /* ---------- the three sample businesses ---------- */
+  var BIZ = {
+    bakery: {
+      tab: 'Bakery', name: 'Maple Lane Bakery & Cafe', initial: 'M',
+      intro: { en: 'I can answer questions, track an order, take an order or book a table.', hl: 'Main sawaalon ke jawab de sakta hoon, order track kar sakta hoon, order le sakta hoon ya table book kar sakta hoon.' },
+      closedDay: 1, open: 8, last: 20, closeLabel: '9 pm',
+      openDays: { en: 'Tuesday to Sunday', hl: 'Mangalvar se Ravivar' },
+      book: { kind: 'party', max: 8, noun: { en: 'table', hl: 'table' } },
+      shop: true,
+      fee: function (total) { return total < 500 ? 40 : 0; },
+      items: [
+        { n: 'Sourdough loaf', p: 180, k: ['sourdough', 'bread', 'loaf'] },
+        { n: 'Butter croissant', p: 90, k: ['croissant'] },
+        { n: 'Brownie', p: 110, k: ['brownie'] },
+        { n: 'Filter coffee', p: 80, k: ['filter'] },
+        { n: 'Cold coffee', p: 140, k: ['cold'] },
+        { n: 'Paneer wrap', p: 200, k: ['paneer', 'wrap'] }
+      ],
+      orders: {
+        '1040': { status: 'Delivered', items: '1 × Paneer wrap, 1 × Filter coffee', eta: null },
+        '1042': { status: 'Out for delivery', items: '2 × Sourdough loaf, 2 × Brownie', eta: { en: 'about 25 minutes', hl: 'lagbhag 25 minute mein' } },
+        '1043': { status: 'Being prepared', items: '1 × Paneer wrap, 2 × Cold coffee', eta: { en: 'about 20 minutes', hl: 'lagbhag 20 minute mein' } }
+      },
+      nextId: 1044, sample: '#1042 or #1043',
+      faqs: [
+        { k: ['deliver', 'delivery', 'ghar'], a: { en: 'Yes, we deliver within 5 km. It costs ₹40 for orders under ₹500 and is free above that. Delivery usually takes 45 to 60 minutes.', hl: 'Haan, 5 km ke andar delivery karte hain. ₹500 se kam ke order par ₹40 lagte hain, usse upar free. Delivery mein 45 se 60 minute lagte hain.' } },
+        { k: ['pay', 'upi', 'card', 'cash', 'paisa'], a: { en: 'We accept UPI, cards and cash (cash on delivery too).', hl: 'UPI, card aur cash sab chalta hai (cash on delivery bhi).' } },
+        { k: ['eggless', 'egg', 'allergy', 'gluten', 'nut'], a: { en: 'Yes, we make eggless cakes and brownies. Some items contain gluten or nuts, so please ask before ordering if you have an allergy.', hl: 'Haan, eggless cake aur brownie milte hain. Kuch items mein gluten ya nuts hote hain, allergy ho to order se pehle pooch lena.' } },
+        { k: ['open', 'hours', 'timing', 'close', 'khul', 'band', 'kitne baje'], a: { en: 'We are open Tuesday to Sunday, 8 am to 9 pm. Closed on Mondays.', hl: 'Hum Mangalvar se Ravivar, subah 8 se raat 9 baje tak khule hain. Somvar ko band rehta hai.' } },
+        { k: ['park'], a: { en: 'There is street parking in front of the shop.', hl: 'Dukaan ke saamne road par parking mil jati hai.' } }
+      ],
+      chips: {
+        en: ['Track my order', 'Place an order', 'Book a table', 'Opening hours'],
+        hl: ['Order track karo', 'Order karna hai', 'Table book karni hai', 'Kitne baje khulte ho?']
+      },
+      tryIt: ['Track an order: #1042 or #1043', 'Place an order, then track it with its new number', 'Book a table, then cancel or change it', 'Write in Hinglish: "kal 7 baje table book karni hai"', 'Ask for a refund to see a hand-off']
+    },
+    salon: {
+      tab: 'Salon', name: 'Glow Studio Salon', initial: 'G',
+      intro: { en: 'I can answer questions, share prices or book an appointment.', hl: 'Main sawaalon ke jawab de sakta hoon, price bata sakta hoon ya appointment book kar sakta hoon.' },
+      closedDay: 2, open: 10, last: 18, closeLabel: '7 pm',
+      openDays: { en: 'Monday and Wednesday to Sunday', hl: 'Somvar aur Budhvar se Ravivar' },
+      book: { kind: 'service', max: 1, noun: { en: 'appointment', hl: 'appointment' } },
+      shop: false,
+      fee: function () { return 0; },
+      items: [
+        { n: 'Haircut', p: 400, k: ['haircut', 'hair cut', 'cut'] },
+        { n: 'Hair spa', p: 1200, k: ['spa'] },
+        { n: 'Facial', p: 1500, k: ['facial'] },
+        { n: 'Manicure', p: 600, k: ['manicure', 'nail'] },
+        { n: 'Beard trim', p: 200, k: ['beard', 'trim'] },
+        { n: 'Hair colour', p: 2500, k: ['colour', 'color'] }
+      ],
+      orders: {}, nextId: 3001, sample: '',
+      faqs: [
+        { k: ['open', 'hours', 'timing', 'close', 'khul', 'band', 'kitne baje'], a: { en: 'We are open Monday and Wednesday to Sunday, 10 am to 7 pm. Closed on Tuesdays.', hl: 'Hum Somvar aur Budhvar se Ravivar, subah 10 se shaam 7 baje tak khule hain. Mangalvar ko band rehta hai.' } },
+        { k: ['pay', 'upi', 'card', 'cash', 'paisa'], a: { en: 'We accept UPI, cards and cash.', hl: 'UPI, card aur cash sab chalta hai.' } },
+        { k: ['walk', 'without booking'], a: { en: 'Walk-ins are welcome when we have a free chair, but booking is safer.', hl: 'Walk-in bhi chalta hai agar chair khaali ho, par booking karna zyada safe hai.' } },
+        { k: ['late', 'policy', 'reschedule policy'], a: { en: 'Please tell us at least 2 hours before your appointment if plans change.', hl: 'Plan badle to appointment se kam se kam 2 ghante pehle bata dena.' } }
+      ],
+      chips: {
+        en: ['Book an appointment', 'Price list', 'Opening hours', 'Cancel my booking'],
+        hl: ['Appointment book karo', 'Price list dikhao', 'Kitne baje khulte ho?', 'Meri booking cancel karo']
+      },
+      tryIt: ['Ask for the price list', 'Book an appointment for a service, then change or cancel it', 'Write in Hinglish: "kal haircut ki appointment chahiye"', 'Ask for a refund to see a hand-off']
+    },
+    store: {
+      tab: 'Clothing store', name: 'Threadline Clothing', initial: 'T',
+      intro: { en: 'I can answer questions, track an order, take an order or book a styling session.', hl: 'Main sawaalon ke jawab de sakta hoon, order track kar sakta hoon, order le sakta hoon ya styling session book kar sakta hoon.' },
+      closedDay: 0, open: 10, last: 19, closeLabel: '8 pm',
+      openDays: { en: 'Monday to Saturday', hl: 'Somvar se Shanivar' },
+      book: { kind: 'party', max: 6, noun: { en: 'styling session', hl: 'styling session' } },
+      shop: true,
+      fee: function (total) { return total >= 999 ? 0 : 79; },
+      items: [
+        { n: 'Cotton kurta', p: 1299, k: ['kurta'] },
+        { n: 'Linen shirt', p: 1499, k: ['shirt', 'linen'] },
+        { n: 'Denim jacket', p: 2499, k: ['jacket', 'denim'] },
+        { n: 'Palazzo pants', p: 999, k: ['palazzo', 'pants'] },
+        { n: 'Cotton dupatta', p: 499, k: ['dupatta'] },
+        { n: 'Sneakers', p: 1899, k: ['sneaker', 'shoes', 'joote'] }
+      ],
+      orders: {
+        '2001': { status: 'Shipped', items: '1 × Cotton kurta, 1 × Cotton dupatta', eta: { en: 'arriving in 2 days', hl: '2 din mein pahunch jayega' } },
+        '2002': { status: 'Packed', items: '1 × Denim jacket', eta: { en: 'shipping tomorrow', hl: 'kal bhej diya jayega' } },
+        '2003': { status: 'Delivered', items: '2 × Linen shirt', eta: null }
+      },
+      nextId: 2004, sample: '#2001 or #2002',
+      faqs: [
+        { k: ['return', 'wapas', 'exchange', 'size'], a: { en: 'You can return or exchange within 7 days if the tags are on. Sizes: S to XL, and the size chart is on every product page.', hl: 'Tag lagi ho to 7 din ke andar return ya exchange ho sakta hai. Size S se XL tak hain, size chart har product ke page par hai.' } },
+        { k: ['deliver', 'delivery', 'shipping', 'ghar'], a: { en: 'Delivery takes 3 to 5 days. It is free for orders of ₹999 and above, otherwise ₹79.', hl: 'Delivery mein 3 se 5 din lagte hain. ₹999 ya usse upar ke order par free, warna ₹79.' } },
+        { k: ['pay', 'upi', 'card', 'cash', 'paisa', 'cod'], a: { en: 'We accept UPI, cards and cash on delivery.', hl: 'UPI, card aur cash on delivery chalta hai.' } },
+        { k: ['open', 'hours', 'timing', 'close', 'khul', 'band', 'kitne baje'], a: { en: 'The store is open Monday to Saturday, 10 am to 8 pm. Closed on Sundays.', hl: 'Dukaan Somvar se Shanivar, subah 10 se raat 8 baje tak khuli hai. Ravivar ko band rehti hai.' } }
+      ],
+      chips: {
+        en: ['Track my order', 'Place an order', 'Book a styling session', 'Return policy'],
+        hl: ['Order track karo', 'Order karna hai', 'Styling session book karo', 'Return policy kya hai?']
+      },
+      tryIt: ['Track an order: #2001 or #2002', 'Place an order, then track it with its new number', 'Book a styling session, then cancel or change it', 'Write in Hinglish: "mujhe ek kurta chahiye"', 'Ask for a refund to see a hand-off']
+    }
+  };
+  var TAB_ORDER = ['bakery', 'salon', 'store'];
+
+  /* ---------- state ---------- */
+  var cur = BIZ.bakery, lang = 'en';
+  var st, alerts, stats, bookings, orders, cart, nextId, busy;
+
+  var $ = function (id) { return document.getElementById(id); };
+  var msgs = $('msgs'), chipsEl = $('chips'), alertsEl = $('alerts'), input = $('input');
+
+  function resetState() {
+    st = { flow: null, data: {} };
+    alerts = []; bookings = []; cart = [];
+    stats = { handled: 0, bookings: 0, orders: 0, handoffs: 0 };
+    orders = JSON.parse(JSON.stringify(cur.orders));
+    nextId = cur.nextId;
+    busy = false;
+  }
+
+  /* ---------- language ---------- */
+  var HL_RE = /\b(kya|hai|hain|kal|aaj|mujhe|mereko|chahiye|chahie|karna|karni|karo|kardo|kab|kitna|kitne|nahi|nahin|aap|aapka|aapke|baje|bhej|batao|bataiye|mera|meri|mere|wala|wali|hoga|milega|dena|dijiye|abhi|shaam|subah|raat|dopahar|haan|han|rehne|khul\w*|kahan|kidhar|ghar|paisa|badal\w*|radd|hata\w*|shikayat|galat|kharab|bas|ruko|dikhao|dekho|ek|kar|karke|kijiye|lijiye|hoon|raha|rahi|rahe|liye|zaroor|theek|thik|accha|achha|shukriya|dhanyavaad)\b/i;
+  var EN_RE = /\b(the|my|is|are|where|what|how|do|you|can|i|to|a|an|please|want|open|cancel|price|order|book|table|hello|hi|thanks|refund|change|opening|hours|policy|return|track|list|appointment|session|parking|payment)\b/i;
+  function detectLang(text) {
+    if (HL_RE.test(text)) return 'hl';
+    if (EN_RE.test(text)) return 'en';
+    return lang;
+  }
+  function langName() { return lang === 'hl' ? 'Hinglish' : 'English'; }
+
+  /* ---------- helpers ---------- */
+  function money(n) { return '₹' + Number(n).toLocaleString('en-IN'); }
+  function clock() { return new Date().toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }); }
+  function hourLabel(h) { return (h % 12 === 0 ? 12 : h % 12) + (h < 12 ? ' am' : ' pm'); }
+  function sameDay(a, b) { return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
+  function today() { var t = new Date(); return new Date(t.getFullYear(), t.getMonth(), t.getDate()); }
+
+  function addBubble(text, who) {
+    var b = document.createElement('div');
+    b.className = 'bubble ' + who;
+    var s = document.createElement('span'); s.textContent = text;
+    var t = document.createElement('span'); t.className = 't'; t.textContent = clock();
+    b.appendChild(s); b.appendChild(t);
+    msgs.appendChild(b);
+    msgs.scrollTop = msgs.scrollHeight;
+    return b;
+  }
+  function setChips(list) {
+    chipsEl.innerHTML = '';
+    (list || []).forEach(function (c) {
+      var btn = document.createElement('button');
+      btn.type = 'button'; btn.className = 'chip'; btn.textContent = c;
+      btn.addEventListener('click', function () { userSays(c); });
+      chipsEl.appendChild(btn);
+    });
+  }
+  function mainChips() { return cur.chips[lang] || cur.chips.en; }
+  var gen = 0; // bumps on every reset so a reply that was still "typing" never lands in a fresh chat
+  function botSays(text, chips) {
+    busy = true;
+    setChips([]);
+    var g = gen;
+    var t = document.createElement('div');
+    t.className = 'bubble bot typing'; t.textContent = 'typing…';
+    msgs.appendChild(t);
+    msgs.scrollTop = msgs.scrollHeight;
+    setTimeout(function () {
+      if (g !== gen) return;
+      msgs.removeChild(t);
+      addBubble(text, 'bot');
+      setChips(chips === undefined || chips === null ? mainChips() : chips);
+      $('langState').textContent = 'Assistant · replying in ' + langName();
+      busy = false;
+    }, 550);
+  }
+
+  function addAlert(kind, text, urgent) {
+    alerts.unshift({ kind: kind, text: text, urgent: !!urgent, at: clock() });
+    renderOwner();
+  }
+  function handled() { stats.handled++; renderOwner(); }
+  function renderOwner() {
+    var s = $('stats');
+    s.innerHTML = '';
+    [['Handled by assistant', stats.handled], ['Bookings', stats.bookings], ['Orders', stats.orders], ['Needs you', stats.handoffs], ['Time saved', stats.handled * 3 + ' min']].forEach(function (p) {
+      var d = document.createElement('div');
+      var dt = document.createElement('dt'); dt.textContent = p[0];
+      var dd = document.createElement('dd'); dd.textContent = p[1];
+      d.appendChild(dt); d.appendChild(dd); s.appendChild(d);
+    });
+    alertsEl.innerHTML = '';
+    if (!alerts.length) {
+      var li = document.createElement('li');
+      li.className = 'empty';
+      li.textContent = 'Bookings, orders and hand-offs from the chat show up here, so you do not have to watch every conversation.';
+      alertsEl.appendChild(li);
+      return;
+    }
+    alerts.forEach(function (a) {
+      var li = document.createElement('li');
+      li.className = 'alert' + (a.urgent ? ' urgent' : '');
+      var k = document.createElement('span'); k.className = 'kind'; k.textContent = a.kind + ' · ' + a.at;
+      var t = document.createElement('span'); t.textContent = a.text;
+      li.appendChild(k); li.appendChild(t);
+      alertsEl.appendChild(li);
+    });
+  }
+
+  /* ---------- dates and times ---------- */
+  function dayChoices() {
+    var out = [], d = today();
+    for (var i = 0; out.length < 3 && i < 14; i++) {
+      var x = new Date(d.getFullYear(), d.getMonth(), d.getDate() + i);
+      if (x.getDay() === cur.closedDay) continue;
+      out.push(x);
+    }
+    return out;
+  }
+  function dayLabel(x) {
+    var diff = Math.round((x - today()) / 86400000);
+    if (diff === 0) return lang === 'hl' ? 'Aaj' : 'Today';
+    if (diff === 1) return lang === 'hl' ? 'Kal' : 'Tomorrow';
+    return x.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+  }
+  function fullDay(x) { return x.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' }); }
+  function parseDay(text) {
+    var s = text.toLowerCase(), t = today();
+    if (/today|\baaj\b/.test(s)) return t;
+    if (/tomorrow|\bkal\b/.test(s)) return new Date(t.getFullYear(), t.getMonth(), t.getDate() + 1);
+    for (var i = 0; i < 7; i++) {
+      if (s.indexOf(WD_ALIAS[i][0]) !== -1 || s.indexOf(WD_ALIAS[i][1]) !== -1) {
+        return new Date(t.getFullYear(), t.getMonth(), t.getDate() + ((i - t.getDay() + 7) % 7));
+      }
+    }
+    return null;
+  }
+  function parseHour(text) {
+    var m = text.toLowerCase().match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/);
+    if (!m) return null;
+    var h = +m[1];
+    if (m[3] === 'pm' && h < 12) h += 12;
+    if (m[3] === 'am' && h === 12) h = 0;
+    if (!m[3] && h < cur.open) h += 12;
+    return h;
+  }
+  function timeChips() {
+    var pick = [cur.open + 2, 12, 17, cur.last].filter(function (h, i, a) { return h >= cur.open && h <= cur.last && a.indexOf(h) === i; });
+    return pick.map(hourLabel);
+  }
+
+  /* ---------- items, cart, bookings ---------- */
+  function findItems(text) {
+    var s = text.toLowerCase(), found = [];
+    cur.items.forEach(function (it) {
+      var hit = it.k.some(function (k) { return s.indexOf(k) !== -1; }) || s.indexOf(it.n.toLowerCase()) !== -1;
+      if (hit) found.push(it);
+    });
+    return found;
+  }
+  function qtyIn(text) {
+    var m = text.match(/\b([1-9])\b/);
+    return m ? +m[1] : 1;
+  }
+  function cartLines() { return cart.map(function (c) { return c.qty + ' × ' + c.item.n; }).join(', '); }
+  function cartTotal() { return cart.reduce(function (a, c) { return a + c.qty * c.item.p; }, 0); }
+  function cartText() {
+    return cart.map(function (c) { return c.qty + ' × ' + c.item.n + '  ' + money(c.qty * c.item.p); }).join('\n') + '\nTotal ' + money(cartTotal());
+  }
+  function catalogText() { return cur.items.map(function (i) { return '• ' + i.n + '  ' + money(i.p); }).join('\n'); }
+  function shopChips() {
+    return cur.items.map(function (i) { return i.n; }).concat([T('checkoutChip'), T('clearChip')]);
+  }
+  function thirdText(b, l) {
+    if (cur.book.kind === 'service') return b.third;
+    return b.third + (l === 'hl' ? ' log' : (b.third === 1 ? ' person' : ' people'));
+  }
+  function bookingSummary(b) {
+    return b.name + '\n' + thirdText(b, lang) + '\n' + fullDay(b.day) + ' at ' + hourLabel(b.hour);
+  }
+  function latestBooking() { return bookings.length ? bookings[bookings.length - 1] : null; }
+
+  /* ---------- fixed replies in both languages ---------- */
+  var L = {
+    en: {
+      hello: function () { return 'Hello! Welcome to ' + cur.name + '. How can I help?'; },
+      menuBack: 'No problem. What can I help you with?',
+      askName: 'Happy to arrange that. What name should I put it under?',
+      askDay: function (n) { return 'Thanks, ' + n + '. Which day?'; },
+      askDayAgain: function () { return 'Which day would you like? We are open ' + cur.openDays.en + '.'; },
+      closed: function () { return "We're closed on " + DAYS.en[cur.closedDay] + 's. Could you pick another day?'; },
+      askTime: function () { return 'Great. What time? Bookings are on the hour, from ' + hourLabel(cur.open) + ' to ' + hourLabel(cur.last) + '.'; },
+      badTime: function () { return 'Bookings are on the hour, between ' + hourLabel(cur.open) + ' and ' + hourLabel(cur.last) + '. Which time suits you?'; },
+      tooSoon: 'That is too soon, we need 2 hours notice. Please pick a later time.',
+      askParty: 'How many people?',
+      badParty: function () { return 'I can book 1 to ' + cur.book.max + ' people here. For bigger groups I will ask the owner. How many people?'; },
+      askService: 'Which service would you like?',
+      badService: 'Please choose one of the services below.',
+      booked: function (b) { return 'Booked ✓\n' + bookingSummary(b) + '\nSee you at ' + cur.name + '!'; },
+      changed: function (b) { return 'Changed ✓\n' + bookingSummary(b) + '\nSee you then!'; },
+      noBooking: "I don't see a booking made from this chat.",
+      cancelAsk: function (b) { return 'Do you want to cancel this booking?\n' + bookingSummary(b); },
+      yesNo: ['Yes, cancel it', 'No, keep it'],
+      cancelled: 'Your booking is cancelled. You can book again any time.',
+      kept: 'Okay, I have kept your booking.',
+      rescheduleStart: function (b) { return 'Sure, let us change it.\n' + bookingSummary(b) + '\nWhich day would you like instead?'; },
+      askOrder: function () { return 'Sure. What is your order number?' + (cur.sample ? ' (Try ' + cur.sample + ')' : ''); },
+      badId: function () { return 'Please send the 4 digit order number, for example ' + Object.keys(orders)[0] + '.'; },
+      notFound: function (id) { return "I couldn't find order #" + id + ' for this number. Please check the number, or I can ask the team to look into it.'; },
+      orderInfo: function (id, o) { return 'Order #' + id + ': ' + o.status + '.\n' + o.items + (o.eta ? '\n' + capital(o.eta.en) + '.' : ''); },
+      noShop: 'We do not take product orders. I can share our price list or book an appointment.',
+      priceList: function () { return 'Our services:\n' + catalogText() + '\nPrices may vary for long hair or colour.'; },
+      shopIntro: function () { return 'Here is what we have. Tap an item to add it, or type what you want (for example "2 ' + cur.items[2].n.toLowerCase() + '"):\n' + catalogText(); },
+      added: function (items, qty) { return 'Added ' + qty + ' × ' + items.join(' and ') + '.\n' + cartText(); },
+      cartEmpty: 'Your cart is empty. Tap an item to add it.',
+      cleared: 'Cart cleared. Tap an item to start again.',
+      itemNotFound: "I couldn't find that item. Please pick from the list.",
+      checkoutAsk: 'Delivery or pickup?',
+      deliveryPickup: ['Delivery', 'Pickup'],
+      placed: function (o) {
+        return 'Order placed ✓\nOrder #' + o.id + '\n' + o.lines + '\n' + (o.delivery ? 'Delivery fee ' + (o.fee ? money(o.fee) : 'free') + '\n' : '') + 'Total ' + money(o.total) + '\n' +
+          (o.delivery ? 'Arriving in about 45 minutes.' : 'Ready for pickup in about 20 minutes.') + '\nTrack it any time with the order number.';
+      },
+      handoff: "I'm not able to help with that myself, so I've passed it to the owner. They'll reply here soon.",
+      thanks: 'You are welcome! Anything else?',
+      checkoutChip: 'Checkout', clearChip: 'Clear cart'
+    },
+    hl: {
+      hello: function () { return 'Namaste! ' + cur.name + ' mein aapka swagat hai. Main kaise madad kar sakta hoon?'; },
+      menuBack: 'Koi baat nahi. Main kya madad karoon?',
+      askName: 'Zaroor. Kis naam se likh doon?',
+      askDay: function (n) { return 'Shukriya, ' + n + '. Kaun sa din?'; },
+      askDayAgain: function () { return 'Kaun sa din chahiye? Hum ' + cur.openDays.hl + ' khule hain.'; },
+      closed: function () { return 'Hum ' + DAYS.hl[cur.closedDay] + ' ko band rehte hain. Koi aur din chun lijiye.'; },
+      askTime: function () { return 'Badhiya. Kitne baje? Booking poore ghante par hoti hai, ' + hourLabel(cur.open) + ' se ' + hourLabel(cur.last) + ' tak.'; },
+      badTime: function () { return 'Booking poore ghante par hoti hai, ' + hourLabel(cur.open) + ' se ' + hourLabel(cur.last) + ' ke beech. Kaun sa time theek rahega?'; },
+      tooSoon: 'Yeh time bahut jaldi hai, 2 ghante pehle batana padta hai. Thoda baad ka time chun lijiye.',
+      askParty: 'Kitne log honge?',
+      badParty: function () { return 'Main yahan 1 se ' + cur.book.max + ' log tak book kar sakta hoon. Bade group ke liye owner se poochna padega. Kitne log?'; },
+      askService: 'Kaun si service chahiye?',
+      badService: 'Neeche di gayi services mein se ek chun lijiye.',
+      booked: function (b) { return 'Book ho gaya ✓\n' + bookingSummary(b) + '\n' + cur.name + ' mein milte hain!'; },
+      changed: function (b) { return 'Badal diya ✓\n' + bookingSummary(b) + '\nTab milte hain!'; },
+      noBooking: 'Is chat se koi booking nahi mili.',
+      cancelAsk: function (b) { return 'Kya yeh booking cancel kar doon?\n' + bookingSummary(b); },
+      yesNo: ['Haan, cancel kar do', 'Nahi, rehne do'],
+      cancelled: 'Aapki booking cancel ho gayi. Kabhi bhi dobara book kar sakte hain.',
+      kept: 'Theek hai, booking waise hi rakh di hai.',
+      rescheduleStart: function (b) { return 'Zaroor, badal dete hain.\n' + bookingSummary(b) + '\nAap kaun sa din chahte hain?'; },
+      askOrder: function () { return 'Zaroor. Aapka order number kya hai?' + (cur.sample ? ' (Try karo ' + cur.sample + ')' : ''); },
+      badId: function () { return '4 ank ka order number bhejiye, jaise ' + Object.keys(orders)[0] + '.'; },
+      notFound: function (id) { return 'Order #' + id + ' is number par nahi mila. Number dobara check kar lijiye, ya main team se dekhne ko keh sakta hoon.'; },
+      orderInfo: function (id, o) { return 'Order #' + id + ': ' + (STATUS_HL[o.status] || o.status) + '.\n' + o.items + (o.eta ? '\n' + capital(o.eta.hl) + '.' : ''); },
+      noShop: 'Hum product order nahi lete. Main price list bhej sakta hoon ya appointment book kar sakta hoon.',
+      priceList: function () { return 'Hamari services:\n' + catalogText() + '\nLambe baal ya colour ke liye price alag ho sakta hai.'; },
+      shopIntro: function () { return 'Yeh hamare paas hai. Item par tap karo ya likh do (jaise "2 ' + cur.items[2].n.toLowerCase() + '"):\n' + catalogText(); },
+      added: function (items, qty) { return qty + ' × ' + items.join(' aur ') + ' add kar diya.\n' + cartText(); },
+      cartEmpty: 'Cart khali hai. Koi item chun lo.',
+      cleared: 'Cart khali kar diya. Dobara item chun lo.',
+      itemNotFound: 'Yeh item nahi mila. List mein se chun lo.',
+      checkoutAsk: 'Delivery chahiye ya pickup?',
+      deliveryPickup: ['Delivery', 'Pickup'],
+      placed: function (o) {
+        return 'Order ho gaya ✓\nOrder #' + o.id + '\n' + o.lines + '\n' + (o.delivery ? 'Delivery charge ' + (o.fee ? money(o.fee) : 'free') + '\n' : '') + 'Total ' + money(o.total) + '\n' +
+          (o.delivery ? 'Lagbhag 45 minute mein pahunch jayega.' : 'Lagbhag 20 minute mein pickup ke liye taiyaar.') + '\nOrder number se kabhi bhi track kar sakte ho.';
+      },
+      handoff: 'Yeh main khud nahi sambhal sakta, isliye maine owner ko bhej diya hai. Woh jaldi yahin reply karenge.',
+      thanks: 'Koi baat nahi! Aur kuch chahiye?',
+      checkoutChip: 'Checkout', clearChip: 'Cart khali karo'
+    }
+  };
+  function T(key) {
+    var v = (L[lang] || L.en)[key];
+    if (typeof v === 'function') return v.apply(null, Array.prototype.slice.call(arguments, 1));
+    return v;
+  }
+  function capital(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+  /* ---------- intents ---------- */
+  function faqAnswer(text) {
+    var s = text.toLowerCase();
+    for (var i = 0; i < cur.faqs.length; i++) {
+      for (var j = 0; j < cur.faqs[i].k.length; j++) {
+        if (s.indexOf(cur.faqs[i].k[j]) !== -1) return cur.faqs[i].a[lang] || cur.faqs[i].a.en;
+      }
+    }
+    return null;
+  }
+  // True when a message clearly asks for something else, so a half-finished flow should be dropped.
+  function otherIntent(text) {
+    return /book|table|appointment|session|track|status|refund|cancel|owner|reschedule/i.test(text) || !!faqAnswer(text);
+  }
+  function handoff(text) {
+    stats.handoffs++;
+    addAlert('Needs you', '"' + text + '" · Customer +91 98xxx xxx12', /refund|wrong|spoil|sick|urgent|now|galat|kharab|paisa wapas/i.test(text));
+    st.flow = null; st.data = {};
+    botSays(T('handoff'));
+  }
+
+  function userSays(text) {
+    text = String(text || '').trim();
+    if (!text || busy) return;
+    lang = detectLang(text);
+    addBubble(text, 'me');
+    input.value = '';
+    route(text);
+  }
+
+  function route(text) {
+    var s = text.toLowerCase();
+    var flowWord = /^(cancel|stop|exit|start over|ruko|rehne do|main menu)$/;
+
+    if (st.flow && flowWord.test(s)) { st.flow = null; st.data = {}; cart = []; return botSays(T('menuBack')); }
+    if (st.flow === 'cancel') return cancelStep(text);
+    if (st.flow === 'order') return orderStep(text);
+    if (st.flow === 'book') return bookStep(text);
+    if (st.flow === 'shop') return shopStep(text);
+    if (st.flow === 'delivery') return deliveryStep(text);
+
+    var bookingWord = /book|table|appointment|slot|reservation|session/.test(s);
+    if (/refund|complain|manager|owner|shikayat|galat|kharab|paisa wapas|spoil|sick/.test(s)) return handoff(text);
+    if (/cancel|radd|hata/.test(s) && bookingWord) return startCancel();
+    if (/reschedule|badal|change|shift|postpone/.test(s) && bookingWord) return startReschedule();
+    if (bookingWord) return startBooking();
+
+    var num = s.match(/#?\b(\d{4})\b/);
+    if (/track|status|where|kahan|kidhar|aayega|pahunch/.test(s) || num) {
+      if (!cur.shop) { handled(); return botSays(T('noShop')); }
+      if (num) return lookup(num[1]);
+      st.flow = 'order';
+      return botSays(T('askOrder'), []);
+    }
+    if (/price|menu|catalog|catalogue|rate|daam|kimat/.test(s) && !cur.shop) { handled(); return botSays(T('priceList')); }
+    if (/order|buy|purchase|mangwa|khareed|menu|catalog|chahiye|chahie|price|daam|kimat/.test(s) || findItems(text).length) {
+      if (!cur.shop) { handled(); return botSays(T('noShop')); }
+      return startShop(text);
+    }
+    var a = faqAnswer(text);
+    if (a) { handled(); return botSays(a); }
+    if (/thank|shukriya|dhanyavaad/.test(s)) return botSays(T('thanks'));
+    if (/^(hi|hello|hey|hii|namaste|namaskar)\b/.test(s)) return botSays(T('hello'));
+    handoff(text);
+  }
+
+  /* ---------- order tracking ---------- */
+  function lookup(id) {
+    st.flow = null;
+    var o = orders[id];
+    if (!o) return botSays(T('notFound', id));
+    handled();
+    botSays(T('orderInfo', id, o));
+  }
+  function orderStep(text) {
+    var m = text.match(/\d{4}/);
+    if (!m) {
+      if (otherIntent(text)) { st.flow = null; return route(text); }
+      return botSays(T('badId'), []);
+    }
+    lookup(m[0]);
+  }
+
+  /* ---------- placing an order ---------- */
+  function startShop(text) {
+    st.flow = 'shop';
+    var found = findItems(text);
+    if (found.length) return shopStep(text);
+    botSays(T('shopIntro'), shopChips());
+  }
+  function shopStep(text) {
+    var s = text.toLowerCase();
+    if (text === T('clearChip') || /clear|khali|empty/.test(s)) { cart = []; return botSays(T('cleared'), shopChips()); }
+    if (text === T('checkoutChip') || /checkout|done|that's all|thats all|bas|confirm|place order/.test(s)) {
+      if (!cart.length) return botSays(T('cartEmpty'), shopChips());
+      st.flow = 'delivery';
+      return botSays(T('checkoutAsk'), T('deliveryPickup'));
+    }
+    var found = findItems(text);
+    if (!found.length) {
+      if (otherIntent(text)) { st.flow = null; return route(text); }
+      return botSays(T('itemNotFound'), shopChips());
+    }
+    var qty = found.length === 1 ? qtyIn(text) : 1;
+    found.forEach(function (it) {
+      var line = cart.filter(function (c) { return c.item === it; })[0];
+      if (line) line.qty += qty; else cart.push({ item: it, qty: qty });
+    });
+    botSays(T('added', found.map(function (i) { return i.n; }), qty), shopChips());
+  }
+  function deliveryStep(text) {
+    var s = text.toLowerCase();
+    var delivery = /deliver|ghar|home/.test(s) && !/\?|do you|kya/.test(s);
+    var pickup = /pick|lene|aaunga|aaungi|store/.test(s);
+    if (!delivery && !pickup) {
+      if (otherIntent(text)) { st.flow = null; return route(text); }
+      return botSays(T('checkoutAsk'), T('deliveryPickup'));
+    }
+    var total0 = cartTotal(), fee = delivery ? cur.fee(total0) : 0;
+    var id = String(nextId++);
+    var lines = cartLines();
+    var total = total0 + fee;
+    orders[id] = { status: 'Received', items: lines, eta: delivery ? { en: 'arriving in about 45 minutes', hl: 'lagbhag 45 minute mein pahunch jayega' } : { en: 'ready for pickup in about 20 minutes', hl: 'lagbhag 20 minute mein pickup ke liye taiyaar' } };
+    stats.orders++;
+    addAlert('New order', '#' + id + ': ' + lines + ' · ' + (delivery ? 'Delivery' : 'Pickup') + ' · ' + money(total), false);
+    handled();
+    cart = []; st.flow = null;
+    botSays(T('placed', { id: id, lines: lines, delivery: delivery, fee: fee, total: total }));
+  }
+
+  /* ---------- bookings: new, change, cancel ---------- */
+  function startBooking() {
+    st.flow = 'book'; st.data = {};
+    botSays(T('askName'), []);
+  }
+  function startReschedule() {
+    var b = latestBooking();
+    if (!b) { st.flow = null; return botSays(T('noBooking')); }
+    st.flow = 'book';
+    st.data = { name: b.name, third: b.third, replacing: b, dayOptions: dayChoices() };
+    botSays(T('rescheduleStart', b), st.data.dayOptions.map(dayLabel));
+  }
+  function startCancel() {
+    var b = latestBooking();
+    if (!b) { st.flow = null; return botSays(T('noBooking')); }
+    st.flow = 'cancel';
+    botSays(T('cancelAsk', b), T('yesNo'));
+  }
+  function cancelStep(text) {
+    var s = text.toLowerCase();
+    var b = latestBooking();
+    st.flow = null;
+    if (b && /(yes|haan|\bha\b|confirm|cancel it|cancel kar)/.test(s)) {
+      bookings.pop();
+      stats.bookings = Math.max(0, stats.bookings - 1);
+      addAlert('Booking cancelled', b.name + ', ' + thirdText(b, 'en') + ', ' + fullDay(b.day) + ' at ' + hourLabel(b.hour) + ' · slot is free again', false);
+      handled();
+      return botSays(T('cancelled'));
+    }
+    botSays(T('kept'));
+  }
+
+  function bookStep(text) {
+    var d = st.data;
+    if (!d.name) {
+      d.name = text.replace(/^(my name is|i am|i'm|name:?|mera naam|naam)\s*/i, '').slice(0, 40);
+      d.dayOptions = dayChoices();
+      return botSays(T('askDay', d.name), d.dayOptions.map(dayLabel));
+    }
+    if (!d.day) {
+      var chosen = null, i;
+      for (i = 0; i < d.dayOptions.length; i++) if (dayLabel(d.dayOptions[i]).toLowerCase() === text.toLowerCase()) chosen = d.dayOptions[i];
+      if (!chosen) chosen = parseDay(text);
+      if (!chosen) return botSays(T('askDayAgain'), d.dayOptions.map(dayLabel));
+      if (chosen.getDay() === cur.closedDay) return botSays(T('closed'), d.dayOptions.map(dayLabel));
+      d.day = chosen;
+      return botSays(T('askTime'), timeChips());
+    }
+    if (d.hour === undefined) {
+      var h = parseHour(text);
+      if (h === null || h < cur.open || h > cur.last) return botSays(T('badTime'), timeChips());
+      var now = new Date();
+      if (sameDay(d.day, now) && h < now.getHours() + 2) return botSays(T('tooSoon'), timeChips().slice(-2));
+      d.hour = h;
+      if (d.third !== undefined) return finishBooking();
+      if (cur.book.kind === 'service') return botSays(T('askService'), cur.items.map(function (x) { return x.n; }));
+      return botSays(T('askParty'), ['1', '2', '3', '4', '6'].filter(function (n) { return +n <= cur.book.max; }));
+    }
+    if (d.third === undefined) {
+      if (cur.book.kind === 'service') {
+        var it = findItems(text)[0];
+        if (!it) return botSays(T('badService'), cur.items.map(function (x) { return x.n; }));
+        d.third = it.n;
+      } else {
+        var n = parseInt(text, 10);
+        if (!(n >= 1 && n <= cur.book.max)) return botSays(T('badParty'), ['1', '2', '4', '6'].filter(function (x) { return +x <= cur.book.max; }));
+        d.third = n;
+      }
+      return finishBooking();
+    }
+  }
+  function finishBooking() {
+    var d = st.data;
+    var b = { name: d.name, day: d.day, hour: d.hour, third: d.third };
+    var changed = !!d.replacing;
+    if (changed) bookings.splice(bookings.indexOf(d.replacing), 1); else stats.bookings++;
+    bookings.push(b);
+    addAlert(changed ? 'Booking changed' : 'New booking', b.name + ', ' + thirdText(b, 'en') + ', ' + fullDay(b.day) + ' at ' + hourLabel(b.hour), false);
+    handled();
+    st.flow = null; st.data = {};
+    botSays(changed ? T('changed', b) : T('booked', b));
+  }
+
+  /* ---------- setup ---------- */
+  function renderTabs() {
+    var host = $('tabs');
+    host.innerHTML = '';
+    TAB_ORDER.forEach(function (id) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'tab'; b.textContent = BIZ[id].tab;
+      b.setAttribute('aria-pressed', String(BIZ[id] === cur));
+      b.addEventListener('click', function () { cur = BIZ[id]; start(); });
+      host.appendChild(b);
+    });
+  }
+  function start() {
+    gen++;
+    resetState();
+    lang = 'en';
+    msgs.innerHTML = '';
+    $('bizName').textContent = cur.name;
+    $('avatar').textContent = cur.initial;
+    $('langState').textContent = 'Assistant · replies in English or Hinglish';
+    var tl = $('tryList');
+    tl.innerHTML = '';
+    cur.tryIt.forEach(function (x) { var li = document.createElement('li'); li.textContent = x; tl.appendChild(li); });
+    renderTabs();
+    renderOwner();
+    addBubble("Hi! I'm the assistant for " + cur.name + '. ' + cur.intro.en, 'bot');
+    setChips(mainChips());
+  }
+
+  $('form').addEventListener('submit', function (e) { e.preventDefault(); userSays(input.value); });
+  $('reset').addEventListener('click', start);
+  start();
+})();
+</script>
+</body>
+</html>
